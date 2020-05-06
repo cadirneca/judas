@@ -1,5 +1,5 @@
 
-JSON USERS AND DEVICES ANALYSIS (JUDAS) TOOL
+JSON USERS AND DEVICES ANALYSIS (JUDAS) TOOL 
 
 #---------------------------------------------
 # Intro
