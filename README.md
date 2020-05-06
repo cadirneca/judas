@@ -5,13 +5,13 @@ JSON USERS AND DEVICES ANALYSIS (JUDAS) TOOL
 # Intro
 #---------------------------------------------
 
-JUDAS is a proof of concept of the latest work I am doing, oriented to the IoT-Forensics research line.
+JUDAS is a proof of concept of the latest work I am doing, oriented to the IoT-Forensics research line. You can download the paper detailing this work from this link: https://ieeexplore.ieee.org/abstract/document/9069950 
 
 Please, do not hesitate to improve this code and adapt it to your own needs ... also, I am not an expert in software
 development, so I hope that those more used to work with python make their improvements and forgive my mistakes. I'm
 just learning this language.
 
-If you find this application or my work interesting, please do not forget to reference it.
+If you find this application or my work interesting, please do not forget to reference it!
 
 Thank you very much for your interest and enjoy!!!
 
@@ -67,5 +67,5 @@ tool and then help in the reporting.
 #---------------------------------------------
 
 Please, any request/comment to my address: nieto@lcc.uma.es
-This is my public profile: https://www.nics.uma.es/nieto
-Thank you for your interest.
+Additional (research) work: https://www.nics.uma.es/nieto
+Thank you for your interest!!
