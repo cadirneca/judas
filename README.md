@@ -1,7 +1,9 @@
 JUDAS process files in order to identify relationships between users and devices. This solution depends on the format 
 of the files, so please take a look and modify what you need to process your files.
 
-#Overview
+This work has been supported by the [EU H2020-SU-ICT-03-2018 Project No. 830929 CyberSec4Europe](cybersec4europe.eu).
+
+# Overview
 
 JUDAS creates an interpretation of the context of a digital investigation, starting by processing the JSON files.
 JUDAS will identify all the data that is relevant to users and devices, following a set of criteria defined during the 
