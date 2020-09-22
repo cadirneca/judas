@@ -1,0 +1,11 @@
+{
+    "name": "JUDAS",
+    "author": "Ana Nieto",
+"url": "https://github.com/cadirneca/judas",
+    "version": "0.1",
+    "baseConfig": "JUDAS",
+    "config": {},
+    "description": "JUDAS process json files to identify relationships between users and devies.",
+    "dataTypeList": ["file"],
+    "command": "judas/judas.py"
+}
