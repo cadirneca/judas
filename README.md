@@ -1,7 +1,7 @@
 JUDAS process files in order to identify relationships between users and devices. This solution depends on the format 
 of the files, so please take a look and modify what you need to process your files.
 
-This work has been supported by the [EU H2020-SU-ICT-03-2018 Project No. 830929 CyberSec4Europe](cybersec4europe.eu).
+This work has been supported by the [EU H2020-SU-ICT-03-2018 Project No. 830929 CyberSec4Europe](cybersec4europe.eu), where [NICS Lab](https://www.nics.uma.es) is one of the partners.
 
 # Overview
 
@@ -18,7 +18,7 @@ Currently, JUDAS process .json files from an Alexa Cloud environment.
 
 Further details are publised in : 
 [Nieto, Ana. "Becoming JUDAS: Correlating Users and Devices During a Digital Investigation." 
-IEEE Transactions on Information Forensics and Security 15 (2020): 3325-3334.](https://ieeexplore.ieee.org/abstract/document/9069950)
+IEEE Transactions on Information Forensics and Security 15 (2020): 3325-3334.](https://www.nics.uma.es/biblio/citekey/judas2020)
 
 
 # How to use JUDAS
