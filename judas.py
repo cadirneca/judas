@@ -1,11 +1,9 @@
 # -------
-# judas. JSON Users and Devices AnalySys tool
+# JUDAS. JSON Users and Devices AnalySys tool
 # -------
-# @author:      Ana Nieto,
-# @email:       nieto@lcc.uma.es
-# @institution: University of Malaga
+# @author:      Ana Nieto
 # @country:     Spain
-# @website:     https://www.linkedin.com/in/ana-nieto-72b17718/
+# @website:     https://www.linkedin.com/in/ananietojimenez/
 ######
 
 import tkinter as tk
@@ -13,19 +11,38 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter import *
 from tkinter.ttk import Combobox
 
-from eatingJson import *
-from PIL import Image
+import json
+import os
+from PIL import Image  # pip install Pillow
 import datetime
-import eating as eat
-import eatingNetwork as eatn
+from ju_eaters import eatingNetwork as eatn, eatingJson as eatj, eating as eat
 import ntpath
 import shodan
+import pipl
+from auxiliar import auxiliar
+from auxiliar.external import ipinfo
+
+import matplotlib
+matplotlib.use("TkAgg") # this is for Mac OS
+
+# configuration parameters are loaded using getConf
+from auxiliar.external.thehive.common import getConf
+# using configparser to build context.json
+from configparser import ConfigParser
+# using the official types for observable:
+from ju_feeders.feedTheHive import JudasConnector
+# connect with thehive:
+from ju_feeders.feedTheHive import connectJudas
+
 
 
 class Judas(Frame):
 
     FILES = 'FILES'
     CONTEXT = 'CONTEXT'
+    NETWORK = "CONTEXT_NOTIFY" #'NETWORK'
+    CONTEXT_NOTIFY = "CONTEXT_NOTIFY"
+
     API = 'API'
     REPORT = 'REPORT'
     GRAPH_MODE0 = ".gif(Summary)"
@@ -33,57 +50,72 @@ class Judas(Frame):
     GRAPH_MODE2 = "Both"
 
     def __init__(self):
+        # Init configuration values:
+        self.cfg = getConf()
+
         # Init variables:
         self.initVariables()
 
         # Init frame:
         Frame.__init__(self)
 
-        self.rowconfigure(1, weight=1)
-        self.columnconfigure(1, weight=1)
+        #self.rowconfigure(1, weight=1)
+        #self.columnconfigure(1, weight=1)
 
         self.master.title("JSON Users and Devices AnalysiS tool")
-        self.master.rowconfigure(0, weight=1)
-        self.master.columnconfigure(0, weight=1)
-        img = tk.Image("photo", file="judas.gif")
+        #self.master.rowconfigure(0, weight=1)
+        #self.master.columnconfigure(0, weight=1)
+        img = tk.Image("photo", file=self.cfg.get('JUDAS', 'icon'))
         self.master.tk.call('wm', 'iconphoto', self.master._w, img)
 
         #self.master.geometry("815x700")
         #icon_path = os.getcwd() + '/judas.ico'
         #self.master.wm_iconphoto(True, PhotoImage(file=icon_path))
         self.grid(sticky=W + E + N + S)
+        self.master.resizable()
 
         # Notebook
         self.notebook = ttk.Notebook(self.master)
         self.frameFiles = Frame(self.notebook)      # frame to handle files
-        self.frameFiles.grid(sticky=W + E + N + S)
         self.frameContext = Frame(self.notebook)    # frame to handle the context
-        self.frameContext.grid(sticky=W + E + N + S)
         self.frameAPIs = Frame(self.notebook)    # frame to handle the context
-        self.frameAPIs.grid(sticky=W + E + N + S)
         self.frameReport = Frame(self.notebook)    # frame to handle the context
-        self.frameReport.grid(sticky=W + E + N + S)
-
-        # Initialize Tab for Files:
-        self.setup_frame_for_files() # Initialize self.frameFiles
+        self.frameEmail = Frame(self.notebook)    # frame to handle the context
+        self.frameNetwork = Frame(self.notebook)    # frame to handle the context
+        self.frameMemory = Frame(self.notebook)  # frame to handle the context
 
         # Initialize Tab for Context:
         self.setup_frame_for_context() # Initialize self.frameContext
+
+        # Initialize Tab for Files:
+        self.setup_frame_for_files() # Initialize self.frameFiles -- not until the context has been loaded
 
         # Initialize Tab for API Keys:
         self.setup_frame_for_APIKeys() # Initialize self.frameAPIs
 
         # Initialize Tab for Report:
-        self.setup_frame_for_Report()  # Initialize self.frameAPIs
+        self.setup_frame_for_Report()  # Initialize self.frameReport
+
+        # Initialize Tab for Network:
+        #self.setup_frame_for_Network()  # Initialize self.frameNetwork
+
+        # Initialize Tab for Email:
+        #self.setup_frame_for_Email()  # Initialize self.frameEmail
+
+        # Initialize Tab for Memory:
+        #self.setup_frame_for_Memory()  # Initialize self.frameMemory
 
         # Rest of configurations:
         self.notebook.add(self.frameContext, text="Context")
         self.notebook.add(self.frameFiles, text="Files")
+        #self.notebook.add(self.frameNetwork, text="Network")
+        #self.notebook.add(self.frameEmail, text="Email")
+        #self.notebook.add(self.frameMemory, text="Memory")
         self.notebook.add(self.frameAPIs, text="API Keys")
         self.notebook.add(self.frameReport, text="Report")
 
-        self.notebook.pack()
-        self.pack()
+        self.notebook.pack(expand=True)
+        self.pack(expand=True)
 
         # First state:
         self.initState()
@@ -110,20 +142,9 @@ class Judas(Frame):
         self.initializeNetwork()
 
 
-    def setup_frame_for_files(self):
-
-        self.frame_options = Frame(self.frameFiles)
-        self.frame_options.grid(sticky=N+S+E+W)
-
-        # -------- LOAD FILES
-        self.button1 = Button(self.frame_options, text="Select default folder", command=self.selectandloadcontext)
-        self.button1.grid(row=0, column=0, sticky=N+S+E+W)
-        self.initLabelText()
-        self.label = Label(self.frame_options, textvariable=self.label_text, wraplength=700, justify=LEFT, anchor=W)
-        self.label.grid(row=0, column=1, sticky=N + S + E + W)
-
+    def initFrameFileSelection(self, myframe):
         # Panel to select type of files
-        self.frameFileType = Frame(self.frame_options)
+        self.frameFileType = Frame(myframe)
         self.frameFileType.grid(sticky=N+S+E+W)
 
         self.varJson = IntVar()
@@ -143,45 +164,70 @@ class Judas(Frame):
         self.button2 = Button(self.frameFileType, text="Feed", bg='deep sky blue', command=self.getRelevantFiles)
         self.button2.grid(row=0, column=3, columnspan=3, sticky=N + S + E + W)
 
+        return self.frameFileType
 
+    def build_table_files(self, parent):
+        """
+        :param parent: parent to allocate the table (e.g. frame)
+        :return: frame with the table
+        """
+        if self.context is None:
+            files = []
+        else:
+            files = auxiliar.File.getFiles(self.context.getFilesProcessed())
+            self.writeText4("Loading files included in the current context.")
 
-        # BOTTOM
+        return auxiliar.File.getTable(parent, files)
+
+    def update_table_files(self):
+        self.scroll_table = self.build_table_files(self.frameFiles)
+        self.scroll_table.grid(row=0, columnspan=2, sticky=W+E+N+S)
+
+    def setup_frame_for_files(self):
+        #self.frameFiles.grid(sticky=W+E+N+S)
+
+        # create table to show files
+        self.update_table_files()
+
+        # BUTTONS
         self.panedBottomFile = PanedWindow(self.frameFiles, orient=HORIZONTAL)
+        self.panedBottomFile.grid_propagate(False)
 
         self.labelKeyFile = Label(self.panedBottomFile, text="Keywords:")
-        self.entryKeywordFile = Entry(self.panedBottomFile, width=50)
+        self.entryKeywordFile = Entry(self.panedBottomFile)#, width=50)
         self.entryKeywordFile.insert(INSERT, " ")
         self.button5 = Button(self.panedBottomFile, text="Search", command=self.searchKeywordsFile)
-
-        self.panedBottomFile.grid(row=2, sticky=W + E + N + S)
 
         self.panedBottomFile.add(self.labelKeyFile)
         self.panedBottomFile.add(self.entryKeywordFile)
         self.panedBottomFile.add(self.button5)
 
-        # -------- NETWORK FILES
-        # Label for results:
+        self.panedBottomFile.grid(row=1, columnspan=2, sticky=W+E)
+
+        # TAG FOR RESULTS
         self.label_text7 = StringVar()
         self.label_text7.set('Results:')
         self.label7 = Label(self.frameFiles, textvariable=self.label_text7, justify=CENTER, anchor=W)
-        self.label7.grid(row=3, sticky=W + E)
+        self.label7.grid(row=2, columnspan=2, sticky=W + E)
+        self.label7.grid_propagate(False)
 
-        # - Results, errors and warnings...
-        self.panedBottomFileErrors = PanedWindow(self.frameFiles, orient=VERTICAL)
+        # RESULTS
+        self.panedBottomFileErrors = PanedWindow(self.frameFiles, orient=HORIZONTAL)
+        self.panedBottomFileErrors.grid(row=3, columnspan=2, padx=275, sticky=W+E)
+        self.panedBottomFileErrors.grid_propagate(False)
 
         self.text4 = Text(self.panedBottomFileErrors, background='snow')  # , wrap = NONE)
         self.text4.insert(INSERT, '\n')  # lorem.paragraph())
         self.text4.config(state=DISABLED)  # only for read
 
         self.scrollbar4 = Scrollbar(self.panedBottomFileErrors, orient=VERTICAL, command=self.text4.yview)
-        self.text4['yscroll'] = self.scrollbar4.set
+        self.scrollbar4.pack(side=RIGHT, fill=Y)
+        #self.text4['yscroll'] = self.scrollbar4.set
 
-        self.scrollbar4.pack(side="right", fill="y")
-        self.text4.pack(side="left", fill="both", expand=True)
 
-        self.panedBottomFileErrors.grid(row=4, sticky=W + E + N + S)
+        self.text4.pack(side=LEFT, fill="both", expand=True)
 
-        self.frameFiles.pack()
+        #self.frameFiles.pack(expand=True)
 
     def setup_frame_for_context(self):
 
@@ -196,11 +242,13 @@ class Judas(Frame):
 
         self.scrollbar2 = Scrollbar(self.panedResults, orient=VERTICAL, command=self.text2.yview)
         self.text2['yscroll'] = self.scrollbar2.set
-        self.button14 = Button(self.panedResults, text="Save Results", bg='blue', command=self.save_results)
+        self.button14_1 = Button(self.panedResults, text="Save Results (plain text)", bg='blue', command=self.save_results)
+        self.button14_2 = Button(self.panedResults, text="Send Observables to TheHive", bg='blue', command=self.save_observable_context)
 
-        self.panedResults.add(self.button14)
         self.panedResults.add(self.label5)
         self.panedResults.add(self.text2)
+        self.panedResults.add(self.button14_1)
+        self.panedResults.add(self.button14_2)
 
         self.panedResults.grid(row=0, column=0, columnspan=2, sticky=W + E + N + S)
 
@@ -208,13 +256,33 @@ class Judas(Frame):
         # RIGHT:
         self.panedButtons = PanedWindow(self.frameContext, orient=VERTICAL)  # , background='sky blue')
 
-        self.button3 = Button(self.panedButtons, text="Show judas context", bg='deep sky blue',command=self.showContext)
+        # Default folder
+        self.label_text10 = StringVar()
+        self.label_text10.set('Default folder:')
+        self.label10 = Label(self.panedButtons, textvariable=self.label_text10, justify=CENTER, anchor=W)
+        self.frame_options = Frame(self.panedButtons)
+        self.frame_options.grid(sticky=N + S + E + W)
+        self.initLabelText_sourceFolder()
+        self.label = Label(self.frame_options, textvariable=self.label_text, wraplength=700, justify=LEFT, anchor=W)
+        self.label.grid(row=0, column=0, sticky=N + S + E + W)
+        self.label.config(fg='blue')
+        self.button1 = Button(self.frame_options, text="Change", command=self.selectandloadcontext)
+        self.button1.grid(row=0, column=1, sticky=N+S+E+W)
+
+        # Files used tu build the context
+        self.label_text9 = StringVar()
+        self.label_text9.set('Type of file added:')
+        self.label9 = Label(self.panedButtons, textvariable=self.label_text9, justify=CENTER, anchor=W)
+        self.initFrameFileSelection(self.panedButtons)
+
+        # Show context
+        self.button3 = Button(self.panedButtons, text="Show JUDAS context", bg='deep sky blue',command=self.showContext)
 
         #graphs:
         self.pannedGraph = PanedWindow(self.panedButtons, orient=HORIZONTAL)
         self.comboGraph = Combobox(self.pannedGraph, state="readonly", values=(self.GRAPH_MODE0, self.GRAPH_MODE1,
                                                                                self.GRAPH_MODE2))
-        self.comboGraph.set(self.GRAPH_MODE2)
+        self.comboGraph.set(self.GRAPH_MODE1)
         #self.comboGraph["values"] = [".gif image", "Web", "Both"]
         self.button9 = Button(self.pannedGraph, text="Plot", bg='deep sky blue', command=self.showContextGraph)
         self.pannedGraph.add(self.comboGraph)
@@ -226,39 +294,40 @@ class Judas(Frame):
         self.button8 = Button(self.panedButtons, text="Show relationships", bg='deep sky blue',command=self.showContextGraph)
         self.button6 = Button(self.panedButtons, text="Summary", bg='yellow',command=self.summary)
         self.button10 = Button(self.panedButtons, text="Show IDs", bg='yellow',command=self.showidcontext)
-        self.label_text3 = StringVar()
-        self.label_text3.set('Network:')
-        self.label3 = Label(self.panedButtons, textvariable=self.label_text3, justify=CENTER, anchor=W)
-        self.button12 = Button(self.panedButtons, text="Show network info", bg='yellow', command=self.showNetworkInfo)
-        self.button13 = Button(self.panedButtons, text="Acquire Public IP info", bg='yellow',command=self.searchInfoPublicIP)
-        self.button15 = Button(self.panedButtons, text="Correlate with context", bg='blue',command=self.correlate_network)
-        self.button16 = Button(self.panedButtons, text="Add to context", bg='blue',
-                               command=self.addNetworkToContext)
+#        self.label_text3 = StringVar()
+#        self.label_text3.set('Network:')
+#        self.label3 = Label(self.panedButtons, textvariable=self.label_text3, justify=CENTER, anchor=W)
+#        self.button12 = Button(self.panedButtons, text="Show network info", bg='yellow', command=self.showNetworkInfo)
+#        self.button13 = Button(self.panedButtons, text="Acquire Public IP info", bg='yellow',command=self.searchInfoPublicIP)
+#        self.button15 = Button(self.panedButtons, text="Correlate with context", bg='blue',command=self.correlate_network)
+#        self.button16 = Button(self.panedButtons, text="Add to context", bg='blue',
+#                               command=self.addNetworkToContext)
         self.label_text8 = StringVar()
-        self.label_text8.set('Users:')
+        self.label_text8.set('Acquire public info (OSINT):')
         self.label8 = Label(self.panedButtons, textvariable=self.label_text8, justify=CENTER, anchor=W)
-        self.button17 = Button(self.panedButtons, text="Acquire Public User Info", bg='yellow',command=self.searchUsersPublicInfo)
-
-        self.label_text9 = StringVar()
-        self.label_text9.set('Devices:')
-        self.label9 = Label(self.panedButtons, textvariable=self.label_text9, justify=CENTER, anchor=W)
-        self.button18 = Button(self.panedButtons, text="Acquire Public Device Info", bg='yellow',command=self.searchDevicePublicInfo)
+        self.button17 = Button(self.panedButtons, text="Users", bg='yellow',command=self.searchUsersPublicInfo)
+        self.button18 = Button(self.panedButtons, text="Devices", bg='yellow',command=self.searchDevicePublicInfo)
+        self.button13 = Button(self.panedButtons, text="Network", bg='yellow',command=self.searchInfoPublicIP)
 
         # self.panedButtons.add(self.button4)
+        self.panedButtons.add(self.label10)
+        self.panedButtons.add(self.frame_options)
+        self.panedButtons.add(self.label9)
+        self.panedButtons.add(self.frameFileType)
         self.panedButtons.add(self.button3)
         self.panedButtons.add(self.pannedGraph)
         self.panedButtons.add(self.label2)
         self.panedButtons.add(self.button6)
         self.panedButtons.add(self.button10)
-        self.panedButtons.add(self.label3)
-        self.panedButtons.add(self.button12)
-        self.panedButtons.add(self.button13)
-        self.panedButtons.add(self.button15)
-        self.panedButtons.add(self.button16)
+        #self.panedButtons.add(self.label3)
+        #self.panedButtons.add(self.button12)
+        #self.panedButtons.add(self.button13)
+        #self.panedButtons.add(self.button15)
+        #self.panedButtons.add(self.button16)
         self.panedButtons.add(self.label8)
         self.panedButtons.add(self.button17)
-        self.panedButtons.add(self.label9)
         self.panedButtons.add(self.button18)
+        self.panedButtons.add(self.button13)
         self.panedButtons.grid(row=0, column=2, sticky=W + E + N + S)
 
         # BOTTOM
@@ -266,7 +335,8 @@ class Judas(Frame):
 
         self.labelKey = Label(self.panedBottom, text="Keywords:")
         self.entryKeyword = Entry(self.panedBottom, width=50)
-        self.entryKeyword.insert(INSERT, "AB72C64C86AW2")
+        self.entryKeyword.config(fg='blue')
+        self.entryKeyword.insert(INSERT, "")
         self.button5 = Button(self.panedBottom, text="Search", command=self.searchKeywords)
 
         self.panedBottom.add(self.labelKey)
@@ -285,15 +355,14 @@ class Judas(Frame):
         self.text3.config(state=DISABLED)  # only for read
 
         self.scrollbar3 = Scrollbar(self.panedEWContext, orient=VERTICAL, command=self.text3.yview)
-        self.text3['yscroll'] = self.scrollbar3.set
-
         self.scrollbar3.pack(side="right", fill="y", expand=False)
+
         self.text3.pack(side="left", fill="both", expand=True)
+
 
         self.panedEWContext.grid(row=3, columnspan=3, sticky=W + E + N + S)
 
         self.frameContext.pack()
-
 
 
     def setup_frame_for_APIKeys(self):
@@ -301,10 +370,10 @@ class Judas(Frame):
         self.frameAPIs.grid(sticky=N + S + E + W)
 
         # 0 - Buttons for load/save API keys
-        self.button19 = Button(self.frameAPIs, text="Load API Keys", command=self.loadAPIkeys)
-        self.button19.grid(column=0, row=0, sticky=E + W)
-        self.button20 = Button(self.frameAPIs, text="Save API Keys", command=self.saveAPIkeys)
-        self.button20.grid(column=1, row=0, sticky=E + W)
+        self.labelKeyInfo = Label(self.frameAPIs, text="Configure default API keys in judas.conf")
+        self.labelKeyInfo.grid(column=0, row=0, sticky=E+W)
+        self.buttonReloadAPI = Button(self.frameAPIs, text="Reload", command=self.refreshAPIkeys)
+        self.buttonReloadAPI.grid(column=1, row=0, sticky=E+W)
 
         # 1 - Network info
         self.labelNetworkInfo = Label(self.frameAPIs, text="NETWORK")
@@ -313,13 +382,13 @@ class Judas(Frame):
         # VirusTotal
         self.labelVT = Label(self.frameAPIs, text="VirusTotal API Key:")
         self.labelVT.grid(column=0, row=2)
-        self.entryVT = Entry(self.frameAPIs, width=60)
+        self.entryVT = Entry(self.frameAPIs, width=100)
         self.entryVT.grid(column=1, row=2, sticky=E + W) #, columnspan=3
 
         # PassiveTotal
         self.labelPT = Label(self.frameAPIs, text="Passive Total API Key:")
         self.labelPT.grid(column=0, row=3)
-        self.entryPT = Entry(self.frameAPIs, width=60)
+        self.entryPT = Entry(self.frameAPIs, width=100)
         self.entryPT.grid(column=1, row=3, sticky=E + W)
 
         # 2 - Devices
@@ -329,7 +398,7 @@ class Judas(Frame):
         # Shodan
         self.labelShodan = Label(self.frameAPIs, text="Shodan API Key:")
         self.labelShodan.grid(column=0, row=5)
-        self.entryShodan = Entry(self.frameAPIs, width=60)
+        self.entryShodan = Entry(self.frameAPIs, width=100)
         self.entryShodan.grid(column=1, row=5,  sticky=E + W)
 
         # 3 - Users
@@ -339,20 +408,23 @@ class Judas(Frame):
         # - Business
         self.labelPiplBus = Label(self.frameAPIs, text="Pipl API Key Business:")
         self.labelPiplBus.grid(column=0, row=7)
-        self.entryPiplBus = Entry(self.frameAPIs, width=60)
+        self.entryPiplBus = Entry(self.frameAPIs, width=100)
         self.entryPiplBus.grid(column=1, row=7, sticky=E + W)
         # - Social
         self.labelPiplSoc = Label(self.frameAPIs, text="Pipl API Key Social:")
         self.labelPiplSoc.grid(column=0, row=8)
-        self.entryPiplSoc = Entry(self.frameAPIs, width=60)
+        self.entryPiplSoc = Entry(self.frameAPIs, width=100)
         self.entryPiplSoc.grid(column=1, row=8, sticky=E + W)
         # - Contact
         self.labelPiplCon = Label(self.frameAPIs, text="Pipl API Key Contact:")
         self.labelPiplCon.grid(column=0, row=9)
-        self.entryPiplCon = Entry(self.frameAPIs, width=60)
+        self.entryPiplCon = Entry(self.frameAPIs, width=100)
         self.entryPiplCon.grid(column=1, row=9, sticky=E + W)
 
         self.frameAPIs.pack()
+
+        #Load default API keys from judas.conf
+        self.loadAPIkeys()
 
     def setup_frame_for_Report(self):
 
@@ -378,7 +450,120 @@ class Judas(Frame):
         self.text1.pack(side="left", fill="both", expand=True)
 
 
-        self.frameReport.pack()
+        self.frameReport.pack(side="top", fill="x")
+
+
+    def setup_frame_for_Network(self):
+        self.frameNetwork.grid(sticky=N + S + E + W)
+
+        #self.paneNetwork = Frame(self.frameNetwork)  # PanedWindow(self.frameReport, orient=HORIZONTAL, bg='deep sky blue')
+        #self.paneNetwork.grid(sticky=N + S + E + W)
+
+        self.panedButtonsNet = Frame(self.frameNetwork)  # PanedWindow(self.frameReport, orient=HORIZONTAL, bg='deep sky blue')
+        self.panedButtonsNet.grid(sticky=N + S + E + W)
+
+        self.label3 = Label(self.panedButtonsNet, text="Network:")
+        self.label3.grid(column=0, row=0, sticky=E + W)
+
+        self.button24 = Button(self.panedButtonsNet, text="Select file (.pcap)", bg='yellow',
+                               command=self.loadNetwork)
+        self.button12 = Button(self.panedButtonsNet, text="Show network info", bg='yellow',
+                               command=self.showNetworkInfo)
+        self.button12.grid(column=0,row=1, sticky=E + W)
+
+        #self.button13 = Button(self.panedButtonsNet, text="Acquire Public IP info", bg='yellow',
+        #                       command=self.searchInfoPublicIP)
+        #self.button13.grid(column=0, row=2, sticky=E + W)
+
+        self.button15 = Button(self.panedButtonsNet, text="Correlate with context", bg='blue',
+                               command=self.correlate_network)
+        self.button15.grid(column=0, row=3, sticky=E + W)
+
+        self.button16 = Button(self.panedButtonsNet, text="Add to context", bg='blue',
+                               command=self.addNetworkToContext)
+        self.button16.grid(column=0, row=4, sticky=E + W)
+
+
+        # text
+        self.panedFeedbackNet = PanedWindow(self.frameNetwork, orient=VERTICAL)
+
+        self.textnetwork = Text(self.panedFeedbackNet, background='snow')  # , wrap = NONE)
+        self.textnetwork.insert(INSERT, '\n')  # lorem.paragraph())
+        self.textnetwork.config(state=DISABLED)  # only for read
+
+        self.scrollbar5 = Scrollbar(self.panedFeedbackNet, orient=VERTICAL, command=self.textnetwork.yview)
+        self.textnetwork['yscroll'] = self.scrollbar5.set
+
+        self.scrollbar5.pack(side="right", fill="y")
+        self.textnetwork.pack(side="left", fill="both", expand=True)
+
+        self.panedFeedbackNet.grid(row=5, sticky=N + S + E + W)
+
+        self.frameNetwork.pack()
+
+
+    def setup_frame_for_Email(self):
+        self.frameEmail.grid(sticky=N + S + E + W)
+
+        self.paneEmail = Frame(self.frameEmail)  # PanedWindow(self.frameReport, orient=HORIZONTAL, bg='deep sky blue')
+        self.paneEmail.grid(sticky=N + S + E + W)
+
+        self.paneEmail.pack()
+
+
+        self.frameEmail.pack()
+
+
+    def setup_frame_for_Memory(self):
+        self.frameMemory.grid(sticky=N + S + E + W)
+
+        self.panedButtonsMemory = Frame(self.frameMemory)
+        self.panedButtonsMemory.grid(sticky=N + S + E + W)
+
+        self.label3 = Label(self.panedButtonsMemory, text="Memory:")
+        self.label3.grid(column=0, row=0, sticky=E + W)
+
+        self.button18 = Button(self.panedButtonsMemory, text="List processes", bg='yellow',
+                               command=self.showMemoryProcesses)
+        self.button18.grid(column=0, row=1, sticky=E + W)
+
+        self.button19 = Button(self.panedButtonsMemory, text="Show connections", bg='yellow',
+                               command=self.searchInfoPublicIP)
+        self.button19.grid(column=0, row=2, sticky=E + W)
+
+        self.button22 = Button(self.panedButtonsMemory, text="Search for public IPs", bg='yellow',
+                               command=self.searchInfoPublicIP)
+        self.button22.grid(column=0, row=3, sticky=E + W)
+
+        self.button23 = Button(self.panedButtonsMemory, text="Extract item from memory", bg='yellow',
+                               command=self.extractItemMemory)
+        self.button23.grid(column=0, row=4, sticky=E + W)
+
+        self.button20 = Button(self.panedButtonsMemory, text="Correlate with context", bg='blue',
+                               command=self.correlate_memory)
+        self.button20.grid(column=0, row=5, sticky=E + W)
+
+        self.button21 = Button(self.panedButtonsMemory, text="Add to context", bg='blue',
+                               command=self.addMemoryToContext)
+        self.button21.grid(column=0, row=6, sticky=E + W)
+
+        self.frameNetwork.pack(expand=True)
+
+
+    def showMemoryProcesses(self):
+        return 0
+
+    def searchInfoPublicIP(self):
+        return 0
+
+    def extractItemMemory(self):
+        return 0
+
+    def correlate_memory(self):
+        return 0
+
+    def addMemoryToContext(self):
+        return 0
 
     # ----------------
     # AUXILIAR
@@ -397,7 +582,7 @@ class Judas(Frame):
 
     def browse_button(self):
         global folder_path
-        filename = filedialog.askdirectory() 
+        filename = filedialog.askdirectory() #askopenfilename(initialdir = "/",title = "Select file",filetypes = (("jpeg files","*.jpg"),("all files","*.*")))#
 
         if filename is not None and len(filename)>0:
             self.label_text.set(filename)
@@ -415,14 +600,23 @@ class Judas(Frame):
             self.writeWarning('File not selected. Loading default file...', Judas.FILES)
             self.initLabelText4()
 
-    def save_file_as(self, text, defextension='.txt'):
-        self.filename = filedialog.asksaveasfilename(defaultextension=defextension) 
+    def save_file_as(self, text, defextension='.txt', dialog = True):
+        default = ""
+        if dialog:
+            self.filename = filedialog.asksaveasfilename(defaultextension=defextension)#, filetypes=self._filetypes)
+        else:
+            self.filename = self.context.getDefaultFilePath()
+            default = "default"
+        # delete file if exists
+        if os.path.exists(self.filename): os.remove(self.filename)
+
+        self.write("File %s saved in %s location" % (self.filename, default), Judas.CONTEXT_NOTIFY)
 
         if self.filename is not None and len(self.filename)>0:
             f = open(self.filename, 'w')
             f.write(text)
             f.close()
-            messagebox.showinfo('JSON Users and Devices AnalysyS tool', 'File Saved')
+            if dialog: messagebox.showinfo('JSON Users and Devices AnalysyS tool', 'File Saved')
 
     def save_logs(self):
         self.save_file_as(self.getLogs())
@@ -430,10 +624,132 @@ class Judas(Frame):
     def save_results(self):
         self.save_file_as(self.getResults())
 
+    def save_observable_context(self, other = True, datamin=5):
+        """
+        :param other: if True this method will add any observable, even if this is not defined in TheHive
+        :param datamin: determine min length (characters) of data to be considered observable
+        :return: this method will contact with TheHive (see judas.conf) to send observables
+        """
+        # observables:
+        # we are going to use the .txt file created when the context is saved
+        # and then build the observables
+        context_file_name = "context.json"
+
+        if self.cfg.get("TheHive", "enable") != "True":
+            self.writeError('Please, enable TheHive in judas.conf', Judas.CONTEXT_NOTIFY)
+            return False
+
+        # write the context just as it is shown
+        contPath = self.context.getDefaultFilePath()
+        self.write("Writing context:" + contPath, Judas.CONTEXT_NOTIFY)
+        self.save_file_as(self.getResults(), dialog=False)
+
+        # convert to get the observables
+        self.write("Convert context to %s with observables" % context_file_name, Judas.CONTEXT_NOTIFY)
+        title = "JUDAS Context " + self.getDate() + " "+ self.getTime()
+        description = "Alexa logs"
+        tags = ['JUDAS', 'Alexa', 'JSON', 'DFIR']
+        data = {"title":title,
+                "tags":tags,
+                "observables":[]}
+        observables = []
+        confred = ConfigParser()
+        contPath = self.context.RESULTS_FOLDER + "/" +context_file_name
+        try:
+            confred.read(self.context.getDefaultFilePath())
+            nobjects = len(confred.sections())
+            self.write("Objects to be procesed:%d" % nobjects, Judas.CONTEXT_NOTIFY)
+            description += " - %d objects generated" % nobjects
+            # now load observables
+            observable_types = JudasConnector.OB_EQUIVALENCE.keys()
+
+            for section in confred.sections():
+                # each section is a object in the context, with a class and a id
+                myclass = confred.get(section, "class")
+                myid = confred.get(section, "id")
+                # each section is a ID
+                options = confred.options(section)
+                # remove class from options
+                options.remove("class")
+                # add options/properties as observables
+                for op in options:
+                    ot = JudasConnector.getObservableTypeEquivalence(op)
+
+                    if ot != JudasConnector.OB_OTHER:
+                        # perfect:
+                        odata = confred.get(section, ot)
+                        new_o = {"data": odata, "dataType": ot, "comment": section,
+                                 "tags": [myclass, myid], "tlp":2}
+                        if len(odata) > datamin: observables += [new_o]
+                    elif other: # other is allowed as a type, add all the options available as other:
+                        for op in options:
+                            if op in ["id", "email"]: tlp=3
+                            elif op in ["type"]: tlp:2
+                            else: tlp = 2
+                            odata = confred.get(section, op)
+                            new_o = {"data": odata, "dataType": ot, "comment": section,
+                                     "tags": [op, myclass, myid], "tlp":tlp}
+                            if len(odata) > datamin: observables += [new_o]
+
+            # add the context in plain text as observable
+            observables += [{"data":self.context.getDefaultFilePath(),
+                             "dataType": JudasConnector.OB_FILE,
+                             "comment": "JUDAS Context",
+                             "tags": ['JUDAS','context']}]
+
+            # add network data as observable:
+            ip_list = self.getIPs() # this is not working due a problem with pyshark in eatingNetwork.py
+            if ip_list is None or len(ip_list)==0:
+                self.writeWarning('Network not available, check path in judas.conf', window=Judas.CONTEXT_NOTIFY)
+            npri = 0
+            npu = 0
+            for ip in ip_list:
+                if ipinfo.ispublic(ip):
+                    comment = "public"
+                    tlp = 1
+                    tags = [ip, 'public']
+                    npu += 1
+                else:
+                    comment = "private"
+                    tlp = 2
+                    tags = [ip,'private']
+                    npri += 1
+                new_o = {"data": ip, "dataType": JudasConnector.OB_IP, "comment": comment,
+                            "tags": tags, "tlp":tlp}
+                observables += [new_o]
+
+            #description += " , %d public ip and %s private ip" % (npu, npri)
+
+            data.update({"observables":observables, "description":description})
+
+            # save as json
+            if os.path.exists(contPath): os.remove(contPath)
+            with open(contPath, 'w') as fp:
+                json.dump(data, ensure_ascii=False, fp=fp)
+
+            # call thehive to send the context:
+            connectJudas(contPath)
+
+        except Exception as e:
+            #logger.error('%s', __name__, exc_info=True)
+            msg = 'writing observables, exception: %s' % (e)
+            self.writeError(msg, Judas.CONTEXT)
+
+
     def openImage(self, filename, title="judas context graph"):
         img = Image.open(filename)
         img.show()
+        """
+        nwin = Toplevel()
+        nwin.title(title)
 
+        image = Image.open(filename)#os.getcwd()+"/"+filename)
+        photo = ImageTk.PhotoImage(image)
+        lbl2 = Label(nwin, image=photo)
+        lbl2.img = photo
+        lbl2.pack()
+        nwin.mainloop()
+        """
 
     def saveAPIkeys(self, file='apiKeys.json'):
         """ Save a file with the API keys"""
@@ -449,33 +765,28 @@ class Judas(Frame):
         except:
             return False
 
+    def refreshAPIkeys(self):
+        """ refresh API keys from judas.conf"""
+        self.cfg = getConf()
+
+        self.entryVT.delete('0', END)
+        self.entryPT.delete('0', END)
+        self.entryShodan.delete('0', END)
+        self.entryPiplBus.delete('0', END)
+        self.entryPiplSoc.delete('0', END)
+        self.entryPiplCon.delete('0', END)
+        self.loadAPIkeys()
 
     def loadAPIkeys(self):
-        """ Loads a file with API keys inside"""
-        # open file
-        filename = filedialog.askopenfilename(initialdir="/", title="Select file with API Keys",
-                                filetypes=(("JSON file", "*.json"), ("all files", "*.*")))        
-        if not bool(filename):
-            return None
+        """ Loads API keys from judas.conf"""
 
-        # get dictionary:
-        try:
-            with open(filename, 'r') as fp:
-                dicto = json.load(fp)
-
-            if dicto is None:
-                return False
-        except:
-            return False
-
-        # update data
-        self.entryVT.insert(INSERT, str(dicto.get("VirusTotal")))
-        self.entryPT.insert(INSERT, str(dicto.get("PassiveTotal")))
-        self.entryShodan.insert(INSERT, str(dicto.get("shodan")))
-        self.entryPiplBus.insert(INSERT, str(dicto.get("piplbus")))
-        self.entryPiplSoc.insert(INSERT, str(dicto.get("piplsoc")))
-        self.entryPiplCon.insert(INSERT, str(dicto.get("piplcon")))
-
+        # insert data
+        self.entryVT.insert(INSERT, self.cfg.get('OSINT', 'VirusTotal'))
+        self.entryPT.insert(INSERT, self.cfg.get('OSINT', 'PassiveTotal'))
+        self.entryShodan.insert(INSERT, self.cfg.get('OSINT', 'Shodan'))
+        self.entryPiplBus.insert(INSERT, self.cfg.get('OSINT', 'PiplBusiness'))
+        self.entryPiplSoc.insert(INSERT, self.cfg.get('OSINT', 'PiplSocial'))
+        self.entryPiplCon.insert(INSERT, self.cfg.get('OSINT', 'PiplContact'))
         return True
 
 
@@ -538,17 +849,20 @@ class Judas(Frame):
         res = self.extractContext(False)
         if res:
             self.writeLog('Default context loaded from %s' % self.getPath())
+            #initialize table for files
+            self.update_table_files()
         else:
             self.writeLog('Warning!! Default context not loaded...')
 
         # Initialise Network Parameters
-        self.initializeNetwork()
+        #self.initializeNetwork()
 
 
 
-    def initLabelText(self):
+    def initLabelText_sourceFolder(self):
         self.label_text = StringVar()
-        self.label_text.set('sources')
+        # try to get 'source' local folder complete path (absolute):
+        self.label_text.set(self.cfg.get("JUDAS", "sources_folder"))
         self.is_directory = True
 
 
@@ -557,7 +871,7 @@ class Judas(Frame):
 
     def initLabelText4(self):
         self.label_text4 = StringVar()
-        self.setLabel4('sources/network/dfrws_police.pcap')
+        self.setLabel4(self.cfg.get("JUDAS", "network_file"))
 
     def clearText1(self):
         self.text1.config(state=NORMAL)
@@ -584,6 +898,13 @@ class Judas(Frame):
         self.text4.delete('1.0', END)
         self.text4.insert(INSERT, '')
         self.text4.config(state=DISABLED)
+
+    def clearTextNetwork(self):
+        self.textnetwork.config(state=NORMAL)
+        self.textnetwork.delete('1.0', END)
+        self.textnetwork.insert(INSERT, '')
+        self.textnetwork.config(state=DISABLED)
+
     # ----------------
     # WRITE TEXT
     # ----------------
@@ -613,6 +934,12 @@ class Judas(Frame):
         self.text4.see('end')  # see the last line
         self.text4.config(state=DISABLED)
 
+    def writeTextNetwork(self, msg):
+        self.textnetwork.config(state=NORMAL)
+        self.textnetwork.insert(INSERT, "%s\n" % (msg))
+        self.textnetwork.see('end')  # see the last line
+        self.textnetwork.config(state=DISABLED)
+
     def write(self, msg, window):
         """
         Writes the msg in the window
@@ -623,6 +950,10 @@ class Judas(Frame):
             self.writeText2(msg)
         elif window == Judas.FILES:
             self.writeText4(msg)
+        elif window == Judas.CONTEXT_NOTIFY:
+            self.writeText3(msg)
+        elif window == Judas.NETWORK:
+            self.writeTextNetwork(msg)
 
 
     def writeError(self, msg, window):
@@ -631,12 +962,20 @@ class Judas(Frame):
             self.writeText3("ERROR>%s" % (msg))
         elif window == Judas.FILES:
             self.writeText4("ERROR>%s" % (msg))
+        elif window == Judas.CONTEXT_NOTIFY:
+            self.writeText3(msg)
+        elif window == Judas.NETWORK:
+            self.writeTextNetwork("ERROR>%s" % (msg))
 
     def writeWarning(self, msg, window):
         if window == Judas.CONTEXT:
             self.writeText3("Warning>%s" % (msg))
         elif window == Judas.FILES:
             self.writeText4("Warning>%s" % (msg))
+        elif window == Judas.CONTEXT_NOTIFY:
+            self.writeText3(msg)
+        elif window == Judas.NETWORK:
+            self.writeTextNetwork("Warning>%s" % (msg))
 
     def appendToText1(self, text, color='black'):
         self.text1.configure(state=NORMAL)
@@ -656,7 +995,7 @@ class Judas(Frame):
             # check if there are more appearances in the same string
             start_index = stringwithwords.find(word, start_index + 1)
             if (start_index == -1):
-                self.appendToText1(stringwithwords[end_index:])
+                self.appendToText1(stringwithwords[end_index:])#, color='black')  # end string
             else:
                 first = end_index
 
@@ -680,28 +1019,35 @@ class Judas(Frame):
     def getIPs(self):
         if self.ips is not None:
             return self.ips
-        if self.macs_ip is not None:
-            self.ips = list(x for l in self.macs_ip.values() for x in l)
-            return self.ips
-        return None
+        if self.macs_ip is None:
+            self.loadNetwork()
+        self.ips = list(x for l in self.macs_ip.values() for x in l)
+        #self.ips = list(dict.fromkeys(self.ips))
+        return self.ips
+
 
     def getMac_IP(self):
         return self.macs_ip
 
 
-    def loadPcap(self, path):
+    def loadPcap(self, pathnetwork):
         #self.browse_button_file()
 
-        self.macs_picture = 'results/mac.png'
-        self.ips_picture = 'results/ip.png'
-        if path is not None:
+        pathresults = self.cfg.get('JUDAS', 'results_folder')
+        self.macs_picture = pathresults + "/" + 'mac.png'
+        self.ips_picture = pathresults + "/" + 'ip.png'
+        if pathnetwork is not None:
             # load pcap file
-            self.macs_ip = eatn.generaGraph(path, self.macs_picture, self.ips_picture)
+            self.macs_ip = eatn.generaGraph(pathnetwork, self.macs_picture, self.ips_picture, pathresults)
             if self.macs_ip is not None:
-                self.writeLog('Network loaded')
+                self.writeLog('Network loaded, elements: %d' % len(self.macs_ip))
+                return True
                 #self.showNetworkInfo()
+            else:
+                self.writeLog('Network not loaded')
         else:
             self.writeLog('Network not selected')
+        return False
 
 
     def getPathsFiles(self, type):
@@ -715,13 +1061,15 @@ class Judas(Frame):
 
     def loadNetwork(self):
         # 1.- check if we have files to load:
-        pf = self.getPathsFiles('.pcap')
+        #pf = self.getPathsFiles('.pcap')
+        pf = self.cfg.get('JUDAS', 'network_file') #one file for now
 
-        if len(pf)>0:
+        if os.path.exists(pf):
             #load info from files:
-            self.loadPcap(pf[0]) #one file for now
+            if self.loadPcap(pf) is None:
+                self.writeError('.pcap files not loaded', Judas.NETWORK)
         else:
-            self.writeError('.pcap files not loaded, please check the presence of .pcap files in the default folder', Judas.FILES)
+            self.writeError('.pcap files not loaded, please check path of .pcap files in judas.conf', Judas.NETWORK)
 
 
     def showNetworkInfo(self):
@@ -730,7 +1078,7 @@ class Judas(Frame):
         mac_ip = self.getMac_IP()
 
         if mac_ip is None:
-            self.writeError('Please load a network (.pcap file) first', Judas.CONTEXT)
+            self.writeError('Please load a network (.pcap file) first', Judas.NETWORK)
 
         else:
             str =''
@@ -740,8 +1088,8 @@ class Judas(Frame):
                 for ip in ip_list:
                     str = "%s  ->IP:%s\n" % (str,ip)
 
-            self.clearText2()
-            self.writeText2(str)
+            self.clearTextNetwork()
+            self.writeTextNetwork(str)
             # show graphs for macs and ips:
             self.openImage(self.macs_picture, 'MAC addresses')
             self.openImage(self.ips_picture, 'IP addresses')
@@ -798,7 +1146,7 @@ class Judas(Frame):
             return False
 
         # 1.- Get users
-        users = self.context.getall(Context.USER)
+        users = self.context.getall(eatj.Context.USER)
 
         # 2.- Perform the requests:
         for u in users:
@@ -807,7 +1155,7 @@ class Judas(Frame):
             lname = u'%s' % u.getFamilyName()
             # print(u)
             # print('Pipl (API Key:%s) Requested info for:%s, %s, %s' % (apikeyPipl[0], email, name, lname))
-            request = SearchAPIRequest(email=email, first_name=name, last_name=lname, api_key=apikeyPipl[0])
+            request = pipl.SearchAPIRequest(email=email, first_name=name, last_name=lname, api_key=apikeyPipl[0])
             response = request.send()
 
             # 3.- Analyse the response:
@@ -849,7 +1197,7 @@ class Judas(Frame):
             self.apiShodan = shodan.Shodan(apikey)
 
         # 2.- Get devices
-        devices = self.context.getall(Context.DEVICE)
+        devices = self.context.getall(eatj.Context.DEVICE)
 
         # 3.- Perform the requests:
         for d in devices:
@@ -869,12 +1217,12 @@ class Judas(Frame):
                 self.writeError('Error while processing Shodan requests for device:%s' % d.getId(), Judas.CONTEXT)
 
         # Now, for addresses with IP (if any):
-        addresses = self.context.getall(Context.ADDRESS)
+        addresses = self.context.getall(eatj.Context.ADDRESS)
         for a in addresses:
             try:
-                if len(a.getBackpack(Address.IP))>0:
+                if len(a.getBackpack(eatj.Address.IP))>0:
                     # Search Shodan
-                    ip = a.getBackpack(Address.IP)[0]
+                    ip = a.getBackpack(eatj.Address.IP)[0]
                     results = self.apiShodan.search(ip)
 
                     # Show the results
@@ -894,10 +1242,10 @@ class Judas(Frame):
         str_out = ''
 
         if self.context is None:
-            self.writeWarning('Please, select a context first...', Judas.CONTEXT)
+            self.writeWarning('Please, select a context first...', Judas.NETWORK)
             return None
         if self.getMac_IP() is None:
-            self.writeWarning('Please, select a network first...', Judas.CONTEXT)
+            self.writeWarning('Please, select a network first...', Judas.NETWORK)
             return None
 
         if self.address_list is None:
@@ -909,12 +1257,13 @@ class Judas(Frame):
         str_out = self.context.correlateNetworkAddresses(self.address_list)
 
         if str_out is not None:
-            self.clearText2()
-            self.writeText2(str_out)
+            self.clearTextNetwork()
+            self.writeTextNetwork(str_out)
             self.writeLog('Correlation between the context and network items done...')
-            self.writeText3('Correlation between the context and network items done...')
+            self.writeTextNetwork('Correlation between the context and network items done...')
+            self.write('Correlation between the context and network items done...', window=Judas.CONTEXT_NOTIFY)
         else:
-            self.writeError('Correlation not possible...', Judas.CONTEXT)
+            self.writeError('Correlation not possible...', Judas.NETWORK)
 
     def addNetworkToContext(self):
         if self.context is None:
@@ -983,10 +1332,10 @@ class Judas(Frame):
 
             self.http_handler = self.context.showContext(output=None, objectsofinterest=None, mode=mode)
             res = self.http_handler
-            msg = 'Interactive graph in http://localhost:8000/force/force2.html'
+            msg = 'Interactive graph in http://localhost:8000/force/judas.html'
 
         if bool(res):
-            self.write(msg, Judas.CONTEXT)
+            self.write(msg, Judas.CONTEXT_NOTIFY)
             self.writeLog(msg)
             return True
 
@@ -1011,7 +1360,7 @@ class Judas(Frame):
         self.myFiles = {}
         path = self.getPath()
         relevant = self.getRelevantExtensions()
-        candidate = Context.getFiles(path, {}, relevant, False)
+        candidate = eatj.Context.getFiles(path, {}, relevant, False)
         if not addto or (self.filePaths is None or len(self.filePaths)==0):
             self.filePaths = candidate
         else:
@@ -1048,10 +1397,10 @@ class Judas(Frame):
             self.extractContext()
 
         #print the context again:
-        saved = self.context.save_context(Context.SAVE_CONTEXT)
+        saved = self.context.save_context(eatj.Context.getdefaultfile())
         if saved:
             self.clearText2()
-            f = open(Context.SAVE_CONTEXT, "r")
+            f = open(eatj.Context.getdefaultfile(), "r")
             self.writeText2(f.read())
             f.close()
             return True
@@ -1060,7 +1409,7 @@ class Judas(Frame):
 
     def extractContext(self, showLogs=True):
         if self.context is None:
-            self.context = Context()
+            self.context = eatj.Context(self.cfg.get("JUDAS", "context_folder"))
 
         if self.filePaths is None or len(self.filePaths)==0:
             self.getRelevantFiles()
@@ -1068,16 +1417,17 @@ class Judas(Frame):
         # Get JSONs (if any):
         if self.filePaths.get('.json'):
             jsonfiles = self.filePaths.get('.json')
-            files_processed = self.context.createContextFromJson(jsonfiles)
+            #store files to be shown
+            self.files_processed = self.context.createContextFromJson(jsonfiles)
 
-            if not bool(files_processed):
+            if not bool(self.files_processed):
                 self.writeError('Context not extracted...', Judas.FILES)
                 self.context = None
                 return False
             else:
                 #if showLogs:
-                not_processed = [x for x in jsonfiles if x not in files_processed]
-                self.writeLog('\n----------Context extracted from files (%d):\n %s' % (len(files_processed), ''.join(["%s\n" % j for j in files_processed])))
+                not_processed = [x for x in jsonfiles if x not in self.files_processed]
+                self.writeLog('\n----------Context extracted from files (%d):\n %s' % (len(self.files_processed), ''.join(["%s\n" % j for j in self.files_processed])))
                 self.writeLog('\n---------Not processed (%d): \n%s' % (len(not_processed), ''.join(["%s\n" % j for j in not_processed])))
 
             return self.showContext()
@@ -1175,6 +1525,7 @@ class Judas(Frame):
         :param bar_groups: name of the groups
         :return: this method prints a graph with the values given as parameters
         """
+        """
         fig, ax = plt.subplots()
         n_groups = len(bar_groups)
         index = np.arange(n_groups)
@@ -1188,7 +1539,7 @@ class Judas(Frame):
                          alpha=opacity,
                          color=colors[i%len(colors)],
                          label=label_rects[i])
-            Anything.autolabel(rect, ax)
+            eatj.Anything.autolabel(rect, ax)
             i += 1
 
         plt.xlabel(x_label)
@@ -1199,6 +1550,7 @@ class Judas(Frame):
 
         plt.tight_layout()
         plt.show()
+        """
 
     def summary(self):
         """
@@ -1208,7 +1560,7 @@ class Judas(Frame):
             self.writeError('Please, select a context first...', Judas.CONTEXT)
         else:
             # 1.- Get summary of Anything:
-            anything_statistics = Anything.printStatistics(False, False)
+            anything_statistics = eatj.Anything.printStatistics(False, False)
             class_name = anything_statistics.get('order')
             total_inst_class = anything_statistics.get('total')
             unique_obj_class = anything_statistics.get('unique')
