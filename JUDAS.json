@@ -1,11 +1,17 @@
 {
     "name": "JUDAS",
     "author": "Ana Nieto",
-"url": "https://github.com/cadirneca/judas",
-    "version": "0.1",
+    "url": "https://github.com/cadirneca/judas",
+    "version": "1.0",
     "baseConfig": "JUDAS",
-    "config": {},
+    "config": {
+        "check_tlp": true,
+        "max_tlp": 3,
+        "service": "get"
+    },
     "description": "JUDAS process json files to identify relationships between users and devies.",
     "dataTypeList": ["file"],
-    "command": "judas/judas_analyzer.py"
+    "command": "JUDAS/judas_analyzer.py",
+    "configurationItems": [],
+    "license": "AGPLv3"
 }
