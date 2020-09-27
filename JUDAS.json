@@ -9,7 +9,7 @@
         "max_tlp": 3,
         "service": "get"
     },
-    "description": "JUDAS process json files to identify relationships between users and devies.",
+    "description": "JUDAS process json files to identify relationships between users and devices.",
     "dataTypeList": ["file"],
     "command": "JUDAS/judas_analyzer.py",
     "configurationItems": [],

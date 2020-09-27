@@ -1,7 +1,16 @@
-# ref: https://cert-bund-cortex-analyzers.readthedocs.io/en/latest/_modules/example_analyzer.html#MinimalPythonAnalyzer
+#!/usr/bin/env python3
+# encoding: utf-8
+
+import os,sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = current_dir + '/..'
+sys.path.insert(0, current_dir)
+sys.path.insert(0,app_dir)
+
 from cortexutils.analyzer import Analyzer
 
-import auxiliar.auxiliar as aux
+from auxiliar import auxiliar as aux
 # configuration parameters are loaded using getConf
 from auxiliar.external.thehive.common import getConf
 from ju_eaters import eatingJson as eatj
@@ -17,7 +26,9 @@ class JudasAnalyzer(Analyzer):
         """Initialization of the class. Here normally all parameters are read using `self.get_param`
         (or `self.getParam`)"""
         Analyzer.__init__(self)
-
+        self.filepath = self.get_param("file", None, None)
+        self.iszip = aux.checkExtension(self.filepath, ['zip'])
+        self.isjson = aux.checkExtension(self.filepath, ['json'])
 
     def run(self):
         """This is called when running the class, as you can see at the __main__ part below. Remember to always report a
@@ -26,17 +37,20 @@ class JudasAnalyzer(Analyzer):
         self.cfg = getConf()
 
         #1.- get parameters
-        if self.data_type == "file":
-            filepath = self.get_param("file")
-            # check if is a zip or a json file
-            if aux.checkExtension(filepath, ['zip','json']):
-                folder_path = os.path.dirname(os.path.abspath(filepath))
+        if self.iszip or self.isjson:
+            folder_path = self.get_param("file")
+            aux.createFolder('aux', folder_path)
+            folder_path = folder_path + '/aux'
+
+            if self.iszip or self.isjson:
+                folder_path = os.path.dirname(os.path.abspath(self.filepath))
                 aux.createFolder('aux', folder_path)
                 folder_path = folder_path + '/aux'
 
-                if aux.checkExtension(filepath, ['json']):
+                if self.isjson:
                     # move to new folder
-                    shutil.move(filepath, folder_path)
+                    shutil.move(self.filepath, folder_path)
+                    self.filepath = folder_path + os.path.basename(self.filepath)
                 else:
                     # unzip to folder_path
                     with zipfile.ZipFile(folder_path, 'r') as zip_ref:
@@ -44,7 +58,7 @@ class JudasAnalyzer(Analyzer):
             else:
                 self.error('Wrong data type, expected zip or json')
 
-        #2.- setup sources in config file - not needed really, but in order to prepare this for future thins...
+        #2.- setup sources in config file - in order to prepare this for future thins...
         self.cfg.set("JUDAS", "sources_folder", folder_path)
 
         #3.- calculate context
