@@ -47,7 +47,7 @@ A small video showing the tool can be seen [here](NOTYET).
 
 # Integration with TheHive
 
-Tnis version of JUDAS is prepared to send the context to [TheHive](https://thehive-project.org/). The context generated 
+This version of JUDAS is prepared to send the context to [TheHive](https://thehive-project.org/). The context generated 
 by JUDAS is stored in context.txt. This file is processed by judas.py in order to create a new file, context.json, that 
 will contains the data to create the case in TheHive and the observables for the case. 
 There are two main files to work with this: feedTheHive.py and TheHiveConnect.py. The last one belongs to Synapse and 
@@ -60,6 +60,16 @@ Remember!! you must modify judas.conf to include the data about TheHive.
 Take into account that using TheHive you are "breaking" the context in a set of pieces, so this is useful only if you 
 want to use the analyzers provided by TheHive. You can use the tags included by JUDAS in order to put the pieces 
 together (e.g. by selecting the ID for a particular User).
+
+# Integration with Cortex
+
+A proof of concept has been prepared in order to test JUDAS as Cortex Analyzer. In particular, the files JUDAS.conf and 
+judas_analyzer.py can be used to create the new analyzer. However, there are multiple dependencies with the GUI, so in 
+this case only a modified version of eatingJson.py is used for the integration.
+
+This analyzer takes a file.zip containing a set of JSON files from Alexa and generates the context. 
+
+![](docs/img/cortex-judas.png)
 
 # Last but not less... 
 
